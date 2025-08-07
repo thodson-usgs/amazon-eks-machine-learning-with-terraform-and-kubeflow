@@ -58,3 +58,9 @@ variable "db_port" {
   description = "MLFlow DB port"
   type        = number
 }
+
+variable "permissions_boundary" {
+  description = "ARN of the permissions boundary policy to attach to IAM roles"
+  type        = string
+  default     = ""
+}

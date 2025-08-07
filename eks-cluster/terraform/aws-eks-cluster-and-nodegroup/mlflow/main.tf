@@ -58,7 +58,8 @@ resource "aws_s3_bucket" "mlflow_artifacts" {
 }
 
 resource "aws_iam_role" "mlflow" {
-  name = "${var.eks_cluster_id}-mlflow-role"
+  name                 = "${var.eks_cluster_id}-mlflow-role"
+  permissions_boundary = var.permissions_boundary != "" ? var.permissions_boundary : null
 
   assume_role_policy = <<POLICY
 {
