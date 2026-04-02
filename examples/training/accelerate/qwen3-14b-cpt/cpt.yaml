@@ -1,0 +1,102 @@
+image: 'nvcr.io/nvidia/pytorch:25.10-py3'
+framework: 'accelerate'
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4
+  nnodes: 4
+  nproc_per_node: 8
+  node_type: 'p4d.24xlarge'  
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+inline_script:
+  - |+
+    cat > /tmp/accel_config.yaml <<EOF
+    compute_environment: LOCAL_MACHINE
+    debug: true
+    distributed_type: FSDP
+    mixed_precision: bf16
+    main_training_function: main
+    num_machines: $PET_NNODES
+    num_processes: $((PET_NPROC_PER_NODE * PET_NNODES ))
+    machine_rank: $PET_NODE_RANK
+    main_process_ip: $PET_MASTER_ADDR
+    main_process_port: $PET_MASTER_PORT
+    fsdp_config:
+      fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+      fsdp_activation_checkpointing_policy: TRANSFORMER_BASED_WRAP
+      fsdp_activation_checkpointing: true
+      fsdp_activation_checkpointing_reentrant: false
+      fsdp_limit_all_gather: true
+      fsdp_backward_prefetch: NO_PREFETCH
+      fsdp_cpu_ram_efficient_loading: true
+      fsdp_forward_prefetch: false
+      fsdp_sharding_strategy: FULL_SHARD
+      fsdp_state_dict_type: SHARDED_STATE_DICT
+      fsdp_sync_module_states: true
+      fsdp_use_orig_params: false
+      fsdp_mixed_precision:
+        param_dtype: bfloat16
+        reduce_dtype: bfloat16
+        buffer_dtype: bfloat16
+    EOF
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install transformers==4.57.1 datasets==4.4.1 peft==0.18.0 
+        accelerate==1.12.0 tensorboard==2.20.0 sentencepiece==0.2.1 torchao==0.14.1
+        wandb==0.23.0 mpi4py==4.1.1
+  - pip3 install liger-kernel==0.7.0
+  - cat /tmp/accel_config.yaml
+  - mkdir -p $HOME/logs/$PET_NODE_RANK
+  - PROCESS_LOG=$HOME/logs/$PET_NODE_RANK/cpt.log
+  - cd $SCRIPTS_DIR
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/Qwen/Qwen3-14B"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: RDMAV_FORK_SAFE
+      value: "1"
+    - name: TRITON_CACHE_DIR
+      value: /tmp
+    - name: XDG_CACHE_HOME
+      value: /tmp
+    - name: SCRIPTS_DIR
+      value: /etc/framework-scripts
+  command:
+    - accelerate
+  args:
+    - launch
+    - --config_file
+    - /tmp/accel_config.yaml
+    - text/cpt_accelerate.py
+    - --hf_model_id="Qwen/Qwen3-14B"
+    - --model_path=$MODEL_PATH
+    - --num_train_epochs=3
+    - --per_device_train_batch_size=2
+    - --per_device_eval_batch_size=1
+    - --gradient_accumulation_steps=1
+    - --warmup_steps=1000
+    - --eval_steps=1000
+    - --save_steps=1000
+    - --max_seq_length=4096
+    - '2>&1 | tee $PROCESS_LOG' 
