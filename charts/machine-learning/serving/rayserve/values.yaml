@@ -64,15 +64,10 @@ image_pull_policy: IfNotPresent
 resources:
   min_replicas: 1
   max_replicas: 2
-  requests:
-    "nvidia.com/gpu": 8
-  limits:
-    "nvidia.com/gpu": 8
+  requests: {}
+  limits: {}
   node_type: 'g6.48xlarge' 
-tolerations:
-  - key: "nvidia.com/gpu"
-    operator: "Exists"
-    effect: "NoSchedule"
+tolerations: []
 pvc:
   - name: pv-fsx
     mount_path: /fsx

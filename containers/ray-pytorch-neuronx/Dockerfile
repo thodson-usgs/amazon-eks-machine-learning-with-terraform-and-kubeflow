@@ -58,10 +58,10 @@ USER ray
 # Combined into a single RUN to reduce layers
 RUN pip install --no-cache-dir \
     --extra-index-url https://pip.repos.neuron.amazonaws.com \
-    libneuronxla==2.2.14584.0+06ac23d1 \
-    neuronx-cc==2.22.12471.0+b4a00d10 \
-    neuronx-distributed==0.16.25997+f431c02e \  
-    neuronx-distributed-inference==0.7.15063+bafa28d5 \
-    torch-neuronx==2.9.0.2.11.19912+e48cd891
+    libneuronxla==2.2.15515.0+50c26cbd \
+    neuronx-cc==2.23.6484.0+3b612583 \
+    neuronx-distributed==0.17.26814+4b18de63 \
+    neuronx-distributed-inference==0.8.16251+f3ca5575 \
+    torch-neuronx==2.9.0.2.12.22436+0f1dac25
 
 CMD ["/bin/bash"]
