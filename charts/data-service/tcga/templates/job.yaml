@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "tcga.fullname" . }}
+  labels:
+    {{- include "tcga.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  {{- if .Values.job.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+      labels:
+        {{- include "tcga.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "tcga.fullname" . }}-script
+            defaultMode: 0755
+        {{- range .Values.pvc }}
+        - name: {{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ .name }}
+        {{- end }}
+        {{- if .Values.ebs }}
+        - name: ebs
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: {{ .Values.ebs.storage | default "100Gi" }}
+                storageClassName: ebs-sc-wait
+        {{- end }}
+      containers:
+        - name: tcga-preprocess
+          image: {{ .Values.image }}
+          command: ["/bin/bash", "/scripts/entrypoint.sh"]
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            {{- range .Values.pvc }}
+            - name: {{ .name }}
+              mountPath: {{ .mount_path }}
+            {{- end }}
+            {{- if .Values.ebs }}
+            - name: ebs
+              mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: RELEASE_NAME
+              value: {{ .Release.Name | quote }}
+            - name: RELEASE_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: PYTHONUNBUFFERED
+              value: "1"

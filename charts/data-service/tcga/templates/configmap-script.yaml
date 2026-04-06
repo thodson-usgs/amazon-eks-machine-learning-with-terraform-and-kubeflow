@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tcga.fullname" . }}-script
+  labels:
+    {{- include "tcga.labels" . | nindent 4 }}
+data:
+  tcga_preprocess.py: |
+{{ .Files.Get "scripts/tcga_preprocess.py" | nindent 4 }}
+  
+  entrypoint.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "=========================================="
+    echo "TCGA Data Preprocessing Pipeline"
+    echo "Release: {{ .Release.Name }}"
+    echo "Namespace: {{ .Release.Namespace }}"
+    echo "=========================================="
+    
+    # Install dependencies
+    echo "Installing Python dependencies..."
+    pip install --quiet --no-cache-dir pandas pyarrow tqdm awscli
+    
+    # Copy script to writable location
+    cp /scripts/tcga_preprocess.py /tmp/tcga_preprocess.py
+    chmod +x /tmp/tcga_preprocess.py
+    
+    # Build command with templated values
+    CMD="python3 /tmp/tcga_preprocess.py"
+    CMD="$CMD --output-dir {{ tpl .Values.tcga.outputDir . }}"
+    CMD="$CMD --raw-dir {{ tpl .Values.tcga.rawDir . }}"
+    
+    {{- if .Values.tcga.skipDownload }}
+    CMD="$CMD --skip-download"
+    {{- end }}
+    
+    {{- if .Values.tcga.skipExpression }}
+    CMD="$CMD --skip-expression"
+    {{- end }}
+    
+    {{- if .Values.tcga.projects }}
+    CMD="$CMD --projects{{ range .Values.tcga.projects }} {{ . }}{{ end }}"
+    {{- end }}
+    
+    echo ""
+    echo "Executing: $CMD"
+    echo "=========================================="
+    echo ""
+    
+    eval $CMD
+    
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+      echo ""
+      echo "=========================================="
+      echo "✗ TCGA preprocessing failed with exit code $EXIT_CODE"
+      echo "=========================================="
+      exit $EXIT_CODE
+    fi
+    
+    {{- if .Values.tcga.finalOutputDir }}
+    # Copy results to final destination
+    FINAL_OUTPUT_DIR="{{ tpl .Values.tcga.finalOutputDir . }}"
+    if [ -n "$FINAL_OUTPUT_DIR" ]; then
+      echo ""
+      echo "=========================================="
+      echo "Copying results to final destination..."
+      echo "Source: {{ tpl .Values.tcga.outputDir . }}"
+      echo "Destination: $FINAL_OUTPUT_DIR"
+      echo "=========================================="
+      
+      mkdir -p "$FINAL_OUTPUT_DIR"
+      cp -r {{ tpl .Values.tcga.outputDir . }}/* "$FINAL_OUTPUT_DIR/"
+      
+      if [ $? -eq 0 ]; then
+        echo "✓ Results copied successfully"
+      else
+        echo "✗ Failed to copy results to final destination"
+        exit 1
+      fi
+    fi
+    {{- end }}
+    
+    echo ""
+    echo "=========================================="
+    echo "✓ TCGA preprocessing completed successfully"
+    echo "=========================================="
+    
+    exit 0

@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.52.1-py312
+FROM rayproject/ray:2.54.1-py312
 
 # 1. Environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive \

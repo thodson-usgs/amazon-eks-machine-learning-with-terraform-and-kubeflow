@@ -1,6 +1,6 @@
 framework: ray_train
 ray:
-  version: '2.52.1'
+  version: '2.54.1'
   dashboard:
     host: '0.0.0.0'
   ports:

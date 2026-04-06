@@ -1,0 +1,68 @@
+# Container image for running the preprocessing pipeline
+image: python:3.11-slim
+
+# TCGA preprocessing configuration
+tcga:
+  # List of TCGA project IDs to process
+  # Empty list = process all 33 TCGA projects
+  # Example: ["TCGA-BRCA", "TCGA-COAD", "TCGA-PRAD"]
+  projects: []
+  
+  # Output directory for processed Parquet files (temporary location)
+  # Processing happens here for speed (typically on EBS)
+  outputDir: "/tmp/tcga_processed"
+  
+  # Final output directory for processed Parquet files
+  # Results are copied here after processing completes (typically on FSx/EFS)
+  # Set to empty string to skip final copy
+  finalOutputDir: "/fsx/home/{{ .Release.Name }}/tcga_processed"
+  
+  # Directory for raw S3 downloads
+  # Default uses release-specific path to avoid conflicts
+  rawDir: "/tmp/tcga_raw"
+  
+  # Skip S3 download and use existing raw data
+  skipDownload: false
+  
+  # Skip gene expression processing (large and slow)
+  skipExpression: false
+
+# Persistent volume claims to mount
+pvc:
+  - name: pv-efs
+    mount_path: /efs
+  - name: pv-fsx
+    mount_path: /fsx
+
+ebs:
+  storage: "4000Gi"
+  mount_path: "/tmp"
+
+# Resource requests and limits
+resources:
+  requests:
+    memory: "8Gi"
+    cpu: "4"
+  limits:
+    memory: "16Gi"
+    cpu: "8"
+
+nodeSelector:
+  # Tells the pod to only schedule on this specific Karpenter NodePool
+  karpenter.sh/nodepool: cpu-compute
+
+tolerations:
+# Allows the pod to bypass the taint
+- key: compute-tier
+  operator: Equal
+  value: heavy-cpu
+  effect: NoSchedule
+
+# Job configuration
+job:
+  # Number of retries before marking job as failed
+  backoffLimit: 2
+  
+  # Time to keep completed jobs (in seconds)
+  # Set to 0 to keep indefinitely
+  ttlSecondsAfterFinished: 86400  # 24 hours

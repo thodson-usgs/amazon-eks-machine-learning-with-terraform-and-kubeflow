@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.52.1-py312-cu128
+FROM rayproject/ray:2.54.1-py312-cu128
 
 # Combine environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
