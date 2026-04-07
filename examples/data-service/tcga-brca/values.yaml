@@ -1,0 +1,54 @@
+# TCGA Preprocessing Example: Breast Invasive Carcinoma
+# This example processes TCGA-BRCA project only
+
+# Container image
+image: python:3.11-slim
+
+# TCGA preprocessing configuration
+tcga:
+  # Specific projects to process
+  projects:
+    - TCGA-BRCA
+  
+  # Output directory for processed Parquet files (temporary location on EBS)
+  outputDir: "/tmp/tcga_processed"
+  
+  # Final output directory (copied after processing completes)
+  finalOutputDir: "/fsx/home/{{ .Release.Name }}/tcga_processed"
+  
+  # Directory for raw S3 downloads
+  rawDir: "/tmp/tcga_raw"
+  
+  # Skip S3 download (set to true if reprocessing existing data)
+  skipDownload: false
+  
+  # Skip gene expression processing (set to true for faster processing)
+  skipExpression: false
+
+# Persistent volume claims
+pvc:
+  - name: pv-efs
+    mount_path: /efs
+  - name: pv-fsx
+    mount_path: /fsx
+
+ebs:
+  storage: "4000Gi"
+  mount_path: "/tmp"
+
+# Resource allocation
+resources:
+  requests:
+    memory: "192Gi"
+    cpu: "4"
+  limits:
+    memory: "256Gi"
+    cpu: "8"
+
+# Job configuration
+job:
+  # Number of retries before marking job as failed
+  backoffLimit: 2
+  
+  # Time to keep completed jobs (24 hours)
+  ttlSecondsAfterFinished: 86400
