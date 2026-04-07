@@ -16,8 +16,11 @@ USER ray
 # Using --no-cache-dir keeps the image size down
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
-    torch==2.10.0 \
-    torchvision==0.25.0 \
-    torchaudio
+        vllm==0.19.0 \
+        pandas==3.0.2 \
+        pyarrow==23.0.1 \
+        scipy==1.17.1
+
+RUN pip install --no-cache-dir transformers==5.5.0
 
 CMD ["/bin/bash"]

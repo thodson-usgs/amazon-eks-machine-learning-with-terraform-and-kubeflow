@@ -59,9 +59,10 @@ docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
     cd $DIR/../../../
-    files=$(find examples/ -regex "\(.*/raytrain/.*/.*\.yaml\)")
+    files=$(find examples/ -regex "\(.*/rayserve/.*/rayservice\.yaml\)")
     for file in $files
     do
+        [[ ! "$file" =~ "-neuron" ]] && [[ "$file" =~ "-vllm" ]] && \
         sed -i -e "s|image:.*$|image: ${fullname}|g" $file && echo "update image: in  $file"
     done
 else

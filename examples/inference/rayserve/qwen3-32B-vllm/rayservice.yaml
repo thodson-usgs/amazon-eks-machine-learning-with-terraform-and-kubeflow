@@ -26,12 +26,6 @@ ray:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.12/site-packages/nvidia/cusparselt/lib:/usr/local/cuda/lib64"
               ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
               PYTHONPATH: "/etc/framework-scripts"
-            pip:
-              - "vllm==0.15.0"
-              - "pandas==2.3.0"
-              - "pyarrow==21.0.0"
-              - "transformers==4.57.6"
-              - "scipy==1.17.0"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64
@@ -60,7 +54,7 @@ resources:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g6.48xlarge' 
+  node_type: 'g6e.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -70,4 +64,4 @@ pvc:
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
-framework: vllm-0.15.0
+framework: vllm-0.19.0
