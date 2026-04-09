@@ -6,7 +6,7 @@ data:
   dist-data-process.sh: |
     #!/bin/bash
    
-    {{- if .Values.git.repo_url }}
+    {{- if and .Values.git .Values.git.repo_url }}
     mkdir -p $HOME/tmp
     GIT_CLONE_DIR=$HOME/tmp/$HOSTNAME
     
@@ -46,7 +46,7 @@ data:
     {{ . }}
     {{- end }}
 
-    {{- if .Values.git.repo_url }}
+    {{- if and .Values.git .Values.git.repo_url }}
     cd $HOME
     rm -rf $GIT_CLONE_DIR
     {{- end }}

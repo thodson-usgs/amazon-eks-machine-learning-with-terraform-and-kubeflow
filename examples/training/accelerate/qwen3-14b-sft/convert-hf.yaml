@@ -17,9 +17,10 @@ tolerations:
     effect: "NoSchedule"
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install transformers==4.57.1 datasets==4.4.1 peft==0.18.0 
-      accelerate==1.12.0 tensorboard==2.20.0 sentencepiece==0.2.1 torchao==0.14.1
+  - pip3 install datasets==4.8.4 peft==0.18.1
+      accelerate==1.13.0 tensorboard==2.20.0 sentencepiece==0.2.1
       wandb==0.23.0 mpi4py==4.1.1
+  - pip3 install transformers==5.5.0 torchao==0.17.0
   - mkdir -p $HOME/logs/$PET_NODE_RANK
   - PROCESS_LOG=$HOME/logs/$PET_NODE_RANK/convert_checkpoint_to_hf.log
   - cd $SCRIPTS_DIR

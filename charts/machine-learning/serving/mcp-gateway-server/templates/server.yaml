@@ -14,7 +14,7 @@ data:
     {{ . | indent 4 }}
     {{- end }}
 
-    {{- if .Values.git.repo_url }}
+    {{- if and .Values.git .Values.git.repo_url }}
     # Install git first for cloning
     export DEBIAN_FRONTEND=noninteractive
     apt-get update && apt-get install -y --no-install-recommends git

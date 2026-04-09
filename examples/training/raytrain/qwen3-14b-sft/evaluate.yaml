@@ -18,14 +18,14 @@ ray:
   runtime_env_yaml:
     runtimeEnvYAML: |
       pip:
-        - transformers==4.57.1 
-        - peft==0.18.0 
-        - torchao==0.14.1 
-        - vllm==0.12.0
+        - peft==0.18.1
+        - vllm==0.19.0
         - "pandas==2.3.0"
         - "pyarrow==21.0.0"
         - bert-score==0.3.13 
         - evaluate==0.4.6
+        - transformers==5.5.0
+        - torchao==0.17.0
 image:
 image_pull_policy: Always
 ebs:

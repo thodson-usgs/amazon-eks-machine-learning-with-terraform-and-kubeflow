@@ -18,15 +18,15 @@ ray:
   runtime_env_yaml:
     runtimeEnvYAML: |
       pip:
-        - transformers==4.57.1 
-        - datasets==4.4.1
-        - peft==0.18.0 
+        - datasets==4.8.4
+        - peft==0.18.1
         - tensorboard==2.20.0
         - sentencepiece==0.2.1
-        - torchao==0.14.1
         - wandb==0.23.0
         - mpi4py==4.1.1
+        - transformers==5.5.0
         - liger-kernel==0.7.0
+        - torchao==0.17.0
 image:
 image_pull_policy: Always
 ebs:

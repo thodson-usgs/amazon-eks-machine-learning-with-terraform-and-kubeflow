@@ -17,8 +17,8 @@ tolerations:
     effect: "NoSchedule"
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install peft==0.18.0 torchao==0.14.1 vllm==0.12.0
-  - pip3 install bert-score==0.3.13 evaluate==0.4.6
+  - pip3 install peft==0.18.1 bert-score==0.3.13 evaluate==0.4.6 vllm==0.19.0
+  - pip3 install transformers==5.5.0 torchao==0.17.0
   - mkdir -p $HOME/logs/$PET_NODE_RANK
   - PROCESS_LOG=$HOME/logs/$PET_NODE_RANK/test_checkpoint.log
   - cd $SCRIPTS_DIR
