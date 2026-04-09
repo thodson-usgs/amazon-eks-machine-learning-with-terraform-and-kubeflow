@@ -1,30 +1,169 @@
+# Triton Inference Server with LeaderWorkerSet (LWS) - Helm Chart Values
+#
+# This chart deploys Triton Inference Server using Kubernetes LeaderWorkerSet
+# for multi-node inference with tensor and pipeline parallelism.
+#
+# Usage:
+#   helm install my-release ./triton-inference-server-lws -f triton_server.yaml
+#
+# See examples under examples/inference/triton-inference-server/ray_vllm_backend/
+# for complete working configurations.
+
+# -- Container image configuration
+# Example:
+#   image:
+#     name: nvcr.io/nvidia/tritonserver:25.10-vllm-python-py3
+#     pull_policy: Always
 image:
   name:
   pull_policy: IfNotPresent
+
+# -- LeaderWorkerSet configuration
+# size: Total number of pods (1 leader + N-1 workers) in the group.
+# For multi-node inference, set to the number of nodes needed.
+# Example: size: 6 for DeepSeek-R1 with PP=6 across 6 nodes
+# Example: size: 2 for Mixtral-8x22B with PP=2 across 2 nodes
 lws:
   size: 2
+
+# -- Compute resources and node selection
+# node_type: EC2 instance type for node selector
+# requests/limits: GPU and EFA resource requests per pod
+# Example:
+#   resources:
+#     node_type: p4de.24xlarge
+#     requests:
+#       "nvidia.com/gpu": 8
+#       "vpc.amazonaws.com/efa": 4
+#     limits:
+#       "nvidia.com/gpu": 8
+#       "vpc.amazonaws.com/efa": 4
 resources:
   node_type: g5.48xlarge
   requests: {}
   limits: {}
+
+# -- Pod tolerations for GPU scheduling
+# Example:
+#   tolerations:
+#     - key: "nvidia.com/gpu"
+#       operator: "Exists"
+#       effect: "NoSchedule"
 tolerations: []
+
+# -- Persistent volume claims for shared storage (FSx, EFS)
+# Each entry creates a volume mount in both leader and worker pods.
+# Example:
+#   pvc:
+#     - name: pv-fsx
+#       mount_path: /fsx
+#     - name: pv-efs
+#       mount_path: /efs
 pvc:
   - name: pv-fsx
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
+
+# -- Ephemeral EBS volume for temporary storage
+# Useful for model caches, logs, and scratch space.
+# Example:
+#   ebs:
+#     storage: 1000Gi
+#     mount_path: /tmp
 ebs: {}
+
+# -- Git repository to clone at startup (optional)
+# Cloned before pre_script runs. Cleaned up after server command completes.
+# Example:
+#   git:
+#     repo_url: https://github.com/org/repo.git
+#     branch: main
+#     commit: abc123
 git:
   repo_url:
   branch:
   commit:
+
+# -- Inline script blocks executed before pre_script
+# Use for generating config files (config.pbtxt, model.json) via heredocs.
+# Each list item is rendered as a block in the launcher script.
+# Example:
+#   inline_script:
+#     - |+
+#       cat > /tmp/config.pbtxt <<EOF
+#       backend: "vllm"
+#       instance_group [{ count: 1, kind: KIND_MODEL }]
+#       EOF
+#     - |+
+#       cat > /tmp/model.json <<EOF
+#       {
+#         "model": "$MODEL_PATH",
+#         "tensor_parallel_size": 8,
+#         "pipeline_parallel_size": 2
+#       }
+#       EOF
+
+# -- Pre-script commands run after inline_script, before the server command
+# Use for setting up directories, copying configs, installing packages.
+# Example:
+#   pre_script:
+#     - mkdir -p $LOG_ROOT
+#     - TP_SIZE=8
+#     - PP_SIZE=2
+#     - MODEL_NAME=my-model
+#     - mkdir -p $MODEL_REPO/$MODEL_NAME/1
+#     - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/1/model.json
+#     - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
 pre_script: []
+
+# -- Post-script commands run after the server command
 post_script: []
+
+# -- Server configuration
+# Defines the Triton server command, args, ports, probes, and autoscaling.
 server:
-  name: triton-inference-server 
+  # Server container name
+  name: triton-inference-server
+
+  # -- Server command and arguments
+  # The command and args are rendered with line continuations in the launcher script.
+  # Example (Ray vLLM backend):
+  #   command:
+  #     - python3
+  #   args:
+  #     - server.py
+  #     - --tp=${TP_SIZE}
+  #     - --pp=${PP_SIZE}
+  #     - --model-repo=${MODEL_REPO}
+  #     - --head_port=6379
+  #     - --grpc_port=8001
+  #     - --http_port=8000
+  #     - --metrics_port=8002
+  #     - --log-file=$OUTPUT_LOG
+  #     - --namespace=${NAMESPACE}
+  #     - --group-key=${GROUP_KEY}
   args: []
   command: []
+
+  # -- Container ports exposed by the server
+  # These are used for both the container port definitions and the ClusterIP Service.
+  # Example:
+  #   ports:
+  #     - name: 'http'
+  #       value: '8000'
+  #     - name: 'grpc'
+  #       value: '8001'
+  #     - name: 'metric'
+  #       value: '8002'
+  #     - name: 'head'
+  #       value: '6379'
   ports: []
+
+  # -- Health check probes
+  # Readiness and liveness probes use /v2/health/ready and /v2/health/live endpoints.
+  # Startup probe allows time for model loading (increase failure_threshold for large models).
+  # Example: failure_threshold: 360 with period_secs: 10 = 60 min startup timeout
   readiness_probe:
     period_secs: 5
     failure_threshold: 3
@@ -34,6 +173,42 @@ server:
   liveness_probe:
     period_secs: 10
     failure_threshold: 3
+
+  # -- Environment variables for the server container
+  # Available in both leader and worker pods. Supports Helm template expressions.
+  # NAMESPACE and GROUP_KEY are automatically injected by the chart.
+  # Example:
+  #   env:
+  #     - name: HOME
+  #       value: /tmp
+  #     - name: MODEL_PATH
+  #       value: /fsx/pretrained-models/deepseek-ai/DeepSeek-R1
+  #     - name: MODEL_REPO
+  #       value: /efs/home/{{ .Release.Name }}/model_repository
+  #     - name: LOG_ROOT
+  #       value: /efs/home/{{ .Release.Name }}/logs
+  #     - name: NCCL_DEBUG
+  #       value: "WARN"
+  #     - name: FI_EFA_USE_DEVICE_RDMA
+  #       value: "1"
+  #     - name: FI_PROVIDER
+  #       value: "efa"
+
+  # -- Horizontal Pod Autoscaler configuration
+  # HPA is created only when maxReplicas > minReplicas.
+  # Scales the LeaderWorkerSet based on custom metrics (e.g., queue time).
+  # Example:
+  #   autoscaling:
+  #     minReplicas: 1
+  #     maxReplicas: 3
+  #     metrics:
+  #       - type: Pods
+  #         pods:
+  #           metric:
+  #             name: avg_time_queue_us
+  #           target:
+  #             type: AverageValue
+  #             averageValue: 50
   autoscaling:
     minReplicas: 1
     maxReplicas: 2

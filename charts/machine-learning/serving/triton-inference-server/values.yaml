@@ -1,28 +1,217 @@
+# Triton Inference Server - Helm Chart Values
+#
+# This chart deploys Triton Inference Server as a single-node Deployment
+# with support for vLLM and TensorRT-LLM backends on CUDA GPUs or AWS Neuron.
+#
+# Usage:
+#   helm install my-release ./triton-inference-server -f triton_server.yaml
+#
+# See examples under examples/inference/triton-inference-server/ for complete
+# working configurations:
+#   - vllm_backend/       (CUDA and Neuron examples)
+#   - tensorrtllm_backend/ (CUDA examples)
+
+# -- Container image configuration
+# vLLM backend example (CUDA):
+#   image:
+#     name: nvcr.io/nvidia/tritonserver:25.10-vllm-python-py3
+# Neuron example (image built from custom container):
+#   image:
+#     name:
+#     pull_policy: Always
 image:
   name:
   pull_policy: IfNotPresent
+
+# -- Compute resources and node selection
+# node_type: EC2 instance type for node selector
+# requests/limits: GPU, Neuron, CPU, and memory resource requests per pod
+#
+# CUDA example (g6.48xlarge with 8 GPUs):
+#   resources:
+#     node_type: g6.48xlarge
+#     requests:
+#       "nvidia.com/gpu": 8
+#     limits:
+#       "nvidia.com/gpu": 8
+#
+# Neuron example (inf2.48xlarge with 4 Neuron devices):
+#   resources:
+#     node_type: inf2.48xlarge
+#     requests:
+#       "aws.amazon.com/neuron": 4
+#       cpu: 16
+#       memory: 128Gi
+#     limits:
+#       "aws.amazon.com/neuron": 4
+#       cpu: 60
+#       memory: 180Gi
 resources:
   node_type: g5.48xlarge
   requests: {}
   limits: {}
+
+# -- Pod tolerations for GPU or Neuron scheduling
+# CUDA example:
+#   tolerations:
+#     - key: "nvidia.com/gpu"
+#       operator: "Exists"
+#       effect: "NoSchedule"
+# Neuron example:
+#   tolerations:
+#     - key: "aws.amazon.com/neuron"
+#       operator: "Exists"
+#       effect: "NoSchedule"
 tolerations: []
+
+# -- Persistent volume claims for shared storage (FSx, EFS)
+# Each entry creates a volume mount in the server pod.
+# Example:
+#   pvc:
+#     - name: pv-fsx
+#       mount_path: /fsx
+#     - name: pv-efs
+#       mount_path: /efs
 pvc:
   - name: pv-fsx
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
+
+# -- Ephemeral EBS volume for temporary storage
+# Used for model caches, TensorRT-LLM engine builds, logs, and scratch space.
+# Example:
+#   ebs:
+#     storage: 400Gi
+#     mount_path: /tmp
 ebs: {}
+
+# -- Git repository to clone at startup (optional)
+# Cloned before pre_script runs. Cleaned up after server command completes.
+# Used by TensorRT-LLM backend to clone TensorRT-LLM repo for conversion scripts.
+# Example:
+#   git:
+#     repo_url: https://github.com/NVIDIA/TensorRT-LLM.git
+#     branch: main
+#     commit: abc123
 git:
   repo_url:
   branch:
   commit:
+
+# -- Inline script blocks executed before pre_script
+# Use for generating config files via heredocs.
+#
+# vLLM backend example (generates config.pbtxt and model.json):
+#   inline_script:
+#     - |+
+#       cat > /tmp/config.pbtxt <<EOF
+#       backend: "vllm"
+#       instance_group [{ count: 1, kind: KIND_MODEL }]
+#       EOF
+#     - |+
+#       cat > /tmp/model.json <<EOF
+#       {
+#         "model": "$MODEL_PATH",
+#         "tokenizer": "$MODEL_PATH",
+#         "tensor_parallel_size": 8,
+#         "max_num_seqs": 8
+#       }
+#       EOF
+#
+# TensorRT-LLM backend example (generates build scripts):
+#   inline_script:
+#     - |+
+#       cat > /tmp/hf_to_trtllm.sh <<'EOF'
+#       #!/bin/bash
+#       python3 convert_checkpoint.py --model_dir=$MODEL_PATH --output_dir=/tmp/ckpt --tp_size=8
+#       EOF
+#     - |+
+#       cat > /tmp/trtllm_engine.sh <<'EOF'
+#       #!/bin/bash
+#       trtllm-build --checkpoint_dir /tmp/ckpt --output_dir /tmp/engine --max_batch_size 4
+#       EOF
+
+# -- Pre-script commands run after inline_script, before the server command
+# Use for setting up model repository, running TensorRT-LLM builds, setting env vars.
+#
+# vLLM backend example:
+#   pre_script:
+#     - mkdir -p $LOG_ROOT
+#     - MODEL_NAME=llama3-8b-instruct
+#     - mkdir -p $MODEL_REPO/$MODEL_NAME/1
+#     - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/1/model.json
+#     - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
+#
+# TensorRT-LLM backend example:
+#   pre_script:
+#     - bash /tmp/hf_to_trtllm.sh
+#     - bash /tmp/trtllm_engine.sh
+#     - bash /tmp/triton_model.sh
+#
+# Neuron example (additional env vars for compilation):
+#   pre_script:
+#     - export NEURON_CC_FLAGS="--model-type transformer --enable-fast-loading-neuron-binaries"
+#     - export NEURON_COMPILE_CACHE_URL="/tmp"
 pre_script: []
+
+# -- Post-script commands run after the server command
 post_script: []
+
+# -- Server configuration
+# Defines the Triton server command, args, ports, probes, env, and autoscaling.
 server:
-  name: triton-inference-server 
+  # Server container name
+  name: triton-inference-server
+
+  # -- Server command and arguments
+  # vLLM backend example (native tritonserver):
+  #   command:
+  #     - tritonserver
+  #   args:
+  #     - --model-repository=${MODEL_REPO}
+  #     - --grpc-port=8001
+  #     - --http-port=8000
+  #     - --metrics-port=8002
+  #     - --log-file=$OUTPUT_LOG
+  #
+  # TensorRT-LLM backend example (Python launcher):
+  #   command:
+  #     - python3
+  #   args:
+  #     - scripts/launch_triton_server.py
+  #     - --world_size=$((TP_SIZE * PP_SIZE))
+  #     - --model_repo=${MODEL_REPO}
+  #     - --grpc_port=8001
+  #     - --http_port=8000
+  #     - --metrics_port=8002
+  #
+  # Neuron example (add --disable-auto-complete-config):
+  #   args:
+  #     - --model-repository=${MODEL_REPO}
+  #     - --disable-auto-complete-config
+  #     - --log-file=$OUTPUT_LOG
   args: []
   command: []
+
+  # -- Container ports exposed by the server
+  # Standard Triton ports: HTTP (8000), gRPC (8001), metrics (8002).
+  # Example:
+  #   ports:
+  #     - name: 'http'
+  #       value: '8000'
+  #     - name: 'grpc'
+  #       value: '8001'
+  #     - name: 'metric'
+  #       value: '8002'
   ports: []
+
+  # -- Health check probes
+  # Uses Triton's /v2/health/ready and /v2/health/live endpoints.
+  # Adjust for model loading time and hardware:
+  #   CUDA: startup failure_threshold: 30 (5 min with period 10s)
+  #   TensorRT-LLM: startup failure_threshold: 90 (15 min for engine build)
+  #   Neuron: startup failure_threshold: 30, period_secs: 60 (30 min for compilation)
   readiness_probe:
     period_secs: 5
     failure_threshold: 3
@@ -32,6 +221,57 @@ server:
   liveness_probe:
     period_secs: 10
     failure_threshold: 3
+
+  # -- Environment variables for the server container
+  # Supports Helm template expressions (e.g., {{ .Release.Name }}).
+  #
+  # CUDA example:
+  #   env:
+  #     - name: HOME
+  #       value: /tmp
+  #     - name: LOG_ROOT
+  #       value: /efs/home/{{ .Release.Name }}/logs
+  #     - name: MODEL_REPO
+  #       value: /efs/home/{{ .Release.Name }}/model_repository
+  #     - name: MODEL_PATH
+  #       value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
+  #
+  # Neuron example (additional env vars):
+  #   env:
+  #     - name: NEURON_COMPILED_ARTIFACTS
+  #       value: /efs/home/{{ .Release.Name }}/neuron-compiled-artifacts
+  #     - name: VLLM_NEURON_FRAMEWORK
+  #       value: "neuronx-distributed-inference"
+
+  # -- Horizontal Pod Autoscaler configuration
+  # HPA is created only when maxReplicas > minReplicas.
+  # Scales the Deployment based on custom Triton metrics.
+  #
+  # CUDA example (scale 1-4 replicas on queue time):
+  #   autoscaling:
+  #     minReplicas: 1
+  #     maxReplicas: 4
+  #     metrics:
+  #       - type: Pods
+  #         pods:
+  #           metric:
+  #             name: avg_time_queue_us
+  #           target:
+  #             type: AverageValue
+  #             averageValue: 50
+  #
+  # Neuron example (higher threshold, more replicas):
+  #   autoscaling:
+  #     minReplicas: 3
+  #     maxReplicas: 6
+  #     metrics:
+  #       - type: Pods
+  #         pods:
+  #           metric:
+  #             name: avg_time_queue_us
+  #           target:
+  #             type: AverageValue
+  #             averageValue: 1000000
   autoscaling:
     minReplicas: 1
     maxReplicas: 2
