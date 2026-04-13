@@ -560,6 +560,15 @@ Login: `user@example.com` with static password from Terraform output
 
 ### Destroy Infrastructure
 
+#### Quick Start Setup
+
+To cleanup quickstart setup, use following command:
+```bash
+cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+terraform destroy -var-file=basic.tfvars
+```
+
+#### Advanced Setup
 This command should mirror your [Apply Terraform](#5-initialize-and-apply-terraform) command:
 
 ```bash
